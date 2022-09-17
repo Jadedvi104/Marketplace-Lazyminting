@@ -1,23 +1,21 @@
 // SPDX-License-Identifier: Multiverse Expert
 pragma solidity ^0.8.4;
-import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC721/IERC721Upgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/utils/math/SafeMathUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721URIStorageUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/utils/StringsUpgradeable.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-contract BWNFT is
-    ERC721Upgradeable,
-    ERC721URIStorageUpgradeable,
-    ERC721EnumerableUpgradeable,
-    AccessControlUpgradeable,
-    PausableUpgradeable,
-    ReentrancyGuardUpgradeable
+contract UNQSNFT is
+    ERC721,
+    ERC721URIStorage,
+    ERC721Enumerable,
+    AccessControl,
+    Pausable,
+    ReentrancyGuard
 {
     struct NFTs {
         address creator;
@@ -32,25 +30,16 @@ contract BWNFT is
     Counters.Counter private tokenIdCounter;
     string public baseURI;
 
-    using SafeMathUpgradeable for uint256;
-
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant MARKET_ROLE = keccak256("MARKET_ROLE");
 
-    function initialize(string memory _name, string memory _symbol)
-        public
-        initializer
-    {
-        __ERC721_init(_name, _symbol);
-        __AccessControl_init();
-        __Pausable_init();
-        __ReentrancyGuard_init();
-
+    constructor() ERC721("UniqeSpot", "UNQS") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(MINTER_ROLE, msg.sender);
         _grantRole(PAUSER_ROLE, msg.sender);
         _grantRole(MARKET_ROLE, msg.sender);
+
     }
 
     function pause() public onlyRole(DEFAULT_ADMIN_ROLE) onlyRole(PAUSER_ROLE) {
@@ -70,15 +59,15 @@ contract BWNFT is
         view
         virtual
         override(
-            ERC721Upgradeable,
-            ERC721EnumerableUpgradeable,
-            AccessControlUpgradeable
+            ERC721,
+            ERC721Enumerable,
+            AccessControl
         )
         returns (bool)
     {
         return
-            interfaceId == type(IERC721Upgradeable).interfaceId ||
-            interfaceId == type(IERC721MetadataUpgradeable).interfaceId ||
+            interfaceId == type(IERC721).interfaceId ||
+            interfaceId == type(IERC721Metadata).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 
@@ -88,7 +77,7 @@ contract BWNFT is
         uint256 tokenId
     )
         internal
-        override(ERC721Upgradeable, ERC721EnumerableUpgradeable)
+        override(ERC721, ERC721Enumerable)
         whenNotPaused
     {
         super._beforeTokenTransfer(from, to, tokenId);
@@ -96,7 +85,7 @@ contract BWNFT is
 
     function _burn(uint256 tokenId)
         internal
-        override(ERC721Upgradeable, ERC721URIStorageUpgradeable)
+        override(ERC721, ERC721URIStorage)
     {
         super._burn(tokenId);
     }
@@ -104,7 +93,7 @@ contract BWNFT is
     function tokenURI(uint256 tokenId)
         public
         view
-        override(ERC721Upgradeable, ERC721URIStorageUpgradeable)
+        override(ERC721, ERC721URIStorage)
         returns (string memory)
     {
         return super.tokenURI(tokenId);
@@ -139,7 +128,7 @@ contract BWNFT is
                     "/",
                     _hash,
                     "/",
-                    StringsUpgradeable.toString(_tokenId),
+                    Strings.toString(_tokenId),
                     ".json"
                 )
             )

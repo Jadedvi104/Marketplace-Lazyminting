@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 
-contract BWNFTPool is AccessControl, ERC721Holder {
+contract UNQSPool is AccessControl, ERC721Holder {
     using Counters for Counters.Counter;
     bytes32 public constant MARKET_ROLE = keccak256("MARKET_ROLE");
 

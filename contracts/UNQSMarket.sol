@@ -48,7 +48,7 @@ interface IERC721 {
     function getNFTOrderId(uint256 _tokenId) external view returns (uint256);
 }
 
-contract BWNFTMarket is ReentrancyGuard, ERC721Holder, Pausable, AccessControl {
+contract UNQSMarket is ReentrancyGuard, ERC721Holder, Pausable, AccessControl {
     using Counters for Counters.Counter;
     Counters.Counter public _orderIds;
     Counters.Counter public _offerIds;
