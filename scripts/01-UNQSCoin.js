@@ -1,17 +1,17 @@
 const hre = require("hardhat")
 
 async function main() {
-  const BWNFTPool = await hre.ethers.getContractFactory("BWNFTPool")
+  const UNQSCoin = await hre.ethers.getContractFactory("UNQSCoin")
+  const deploy = await UNQSCoin.deploy()
 
-  const deploy = await BWNFTPool.deploy()
   await deploy.deployed()
 
-  console.log("BWNFTPool deployed to:", deploy.address)
+  console.log("UNQSCoin deployed to:", deploy.address)
 
   try {
     await hre.run("verify:verify", {
       address: deploy.address,
-      contract: "contracts/BWNFTPool.sol:BWNFTPool",
+      contract: "contracts/UNQSCoin.sol:UNQSCoin",
     })
   } catch (error) {
     console.log(error)

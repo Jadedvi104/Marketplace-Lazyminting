@@ -132,37 +132,6 @@ contract UNQSMarket is ReentrancyGuard, ERC721Holder, Pausable, AccessControl {
         bool cancel
     );
 
-    event OfferEvent(
-        address indexed buyer,
-        uint256 price,
-        uint256 indexed tokenId,
-        uint256 indexed offerId,
-        address buyWithTokenContract,
-        uint256 timeOfferStart,
-        uint256 timeOfferEnd,
-        bool isAccept,
-        bool active
-    );
-
-    event CancelOfferEvent(
-        address indexed buyer,
-        uint256 indexedtokenId,
-        uint256 indexed offerId,
-        bool active
-    );
-
-    event offerSuccesfully(
-        address nftContract,
-        uint256 indexed tokenId,
-        uint256 indexed offerId,
-        address seller,
-        address buyer,
-        uint256 price,
-        bool sold,
-        bool isAccept,
-        bool active
-    );
-
     constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
@@ -207,6 +176,8 @@ contract UNQSMarket is ReentrancyGuard, ERC721Holder, Pausable, AccessControl {
     }
 
     /******************* Action Functions *********************/
+
+    //Whitelisting Address
 
     /* Create an offer for specific order on the marketplace */
     function makeOffer(

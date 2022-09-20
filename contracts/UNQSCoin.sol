@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 contract UNQSCoin is ERC20, AccessControl {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
-    constructor() ERC20("Blue Wolf Coin", "BWC") {
+    constructor() ERC20("UniqSpot Coin", "UNQS") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(MINTER_ROLE, msg.sender);
     }

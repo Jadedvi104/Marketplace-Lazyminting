@@ -36,12 +36,18 @@ module.exports = {
       accounts:
         process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
     },
+    mumbai: {
+      url: "https://rpc-mumbai.maticvigil.com/v1/7b883dff16b7c58811427e8ea5cd768934492268",
+      chainId: 80001,
+      accounts:
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+    },
   },
   gasReporter: {
     enabled: process.env.REPORT_GAS !== undefined,
     currency: "USD",
   },
   etherscan: {
-    apiKey: process.env.BINANCESCAN_API_KEY,
+    apiKey: process.env.MUMBAI_API_KEY,
   },
 }
