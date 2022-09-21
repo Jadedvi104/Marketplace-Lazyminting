@@ -9,6 +9,7 @@ import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 
 contract UNQSPool is AccessControl, ERC721Holder {
     using Counters for Counters.Counter;
+    
     bytes32 public constant MARKET_ROLE = keccak256("MARKET_ROLE");
 
     mapping(address => mapping(address => mapping(uint256 => uint256)))

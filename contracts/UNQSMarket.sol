@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 
@@ -20,32 +21,6 @@ interface NFT_POOL {
         address to,
         uint256 tokenId
     ) external;
-}
-
-interface IERC721 {
-    function safeTransferFrom(
-        address from,
-        address to,
-        uint256 tokenId
-    ) external;
-
-    function listOnMarket(
-        uint256 _tokenId,
-        bool _listed,
-        uint256 _orderId
-    ) external;
-
-    function updateOwner(
-        uint256 _tokenId,
-        address _newOwner,
-        uint256 _price
-    ) external;
-
-    function getNFTOwner(uint256 _tokenId) external view returns (address);
-
-    function getNFTListed(uint256 _tokenId) external view returns (bool);
-
-    function getNFTOrderId(uint256 _tokenId) external view returns (uint256);
 }
 
 contract UNQSMarket is ReentrancyGuard, ERC721Holder, Pausable, AccessControl {
@@ -88,8 +63,8 @@ contract UNQSMarket is ReentrancyGuard, ERC721Holder, Pausable, AccessControl {
     /************************** Mappings *********************/
 
     mapping(uint256 => Order) public idToOrder;
-    //
     mapping(uint256 => Offer[]) private offers;
+    mapping(address => bool) private isWhitelist;
 
     /************************** Events *********************/
 
@@ -153,6 +128,14 @@ contract UNQSMarket is ReentrancyGuard, ERC721Holder, Pausable, AccessControl {
         nftPool = _nftPool;
     }
 
+    function setWhitelist(address whitelistAddress)
+        public
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        require(!isWhitelist[whitelistAddress], "User already exist in whitelist" );
+        isWhitelist[whitelistAddress] = true;
+    }
+
     function updateFeesRate(uint256 newRate)
         public
         onlyRole(DEFAULT_ADMIN_ROLE)
@@ -178,7 +161,7 @@ contract UNQSMarket is ReentrancyGuard, ERC721Holder, Pausable, AccessControl {
     /******************* Action Functions *********************/
 
     //Whitelisting Address
-    
+
 
     /* Places an item for sale on the marketplace */
     function createOrder(
@@ -206,7 +189,6 @@ contract UNQSMarket is ReentrancyGuard, ERC721Holder, Pausable, AccessControl {
 
         // tranfer NFT ownership to Market contract
         IERC721(nftContract).safeTransferFrom(msg.sender, nftPool, tokenId);
-        IERC721(nftContract).listOnMarket(tokenId, true, orderId);
         NFT_POOL(nftPool).depositNFT(nftContract, tokenId, msg.sender);
 
         emit OrderCreated(
@@ -236,11 +218,6 @@ contract UNQSMarket is ReentrancyGuard, ERC721Holder, Pausable, AccessControl {
             idToOrder[orderId].nftContract,
             msg.sender,
             idToOrder[orderId].tokenId
-        );
-        IERC721(idToOrder[orderId].nftContract).listOnMarket(
-            idToOrder[orderId].tokenId,
-            false,
-            orderId
         );
 
         emit OrderCanceled(
@@ -279,14 +256,16 @@ contract UNQSMarket is ReentrancyGuard, ERC721Holder, Pausable, AccessControl {
             "Your balance has not enough amount + including fee."
         );
 
-        //Transfer fee to platform.
-        IERC20(buyWithTokenContract).transferFrom(
+        //if not the whitelists, transfer fee to platform.
+        if(!isWhitelist[msg.sender]) {
+            IERC20(buyWithTokenContract).transferFrom(
             msg.sender,
             address(this),
             fee
-        );
+            );
+        }
 
-        //Transfer token(BUSD) to nft seller.
+        //Transfer token to nft seller.
         IERC20(buyWithTokenContract).transferFrom(
             msg.sender,
             idToOrder[orderId].seller,
@@ -300,7 +279,6 @@ contract UNQSMarket is ReentrancyGuard, ERC721Holder, Pausable, AccessControl {
             tokenId
         );
 
-        IERC721(nftContract).updateOwner(tokenId, msg.sender, price);
 
         idToOrder[orderId].owner = msg.sender;
         idToOrder[orderId].sold = true;

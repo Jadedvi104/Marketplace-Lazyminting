@@ -142,46 +142,4 @@ contract UNQSNFT is
         return _tokenId;
     }
 
-    function listOnMarket(
-        uint256 _tokenId,
-        bool _listed,
-        uint256 _orderId
-    ) public onlyRole(MARKET_ROLE) {
-        sNfts[_tokenId].listed = _listed;
-        if (_listed == true) {
-            sNfts[_tokenId].orderId.push(_orderId);
-        } else {
-            require(
-                sNfts[_tokenId].orderId[sNfts[_tokenId].orderId.length - 1] ==
-                    _orderId,
-                "This order is not exist"
-            );
-            sNfts[_tokenId].orderId.pop();
-        }
-    }
-
-    function updateOwner(
-        uint256 _tokenId,
-        address _newOwner,
-        uint256 _price
-    ) public onlyRole(MARKET_ROLE) {
-        sNfts[_tokenId].owner.push(_newOwner);
-        sNfts[_tokenId].price.push(_price);
-    }
-
-    function getNfts(uint256 _tokenId) public view returns (NFTs memory) {
-        return sNfts[_tokenId];
-    }
-
-    function getNFTOwner(uint256 _tokenId) public view returns (address) {
-        return sNfts[_tokenId].owner[sNfts[_tokenId].owner.length - 1];
-    }
-
-    function getNFTListed(uint256 _tokenId) public view returns (bool) {
-        return sNfts[_tokenId].listed;
-    }
-
-    function getNFTOrderId(uint256 _tokenId) public view returns (uint256) {
-        return sNfts[_tokenId].orderId[sNfts[_tokenId].orderId.length - 1];
-    }
 }
