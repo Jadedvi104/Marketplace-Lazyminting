@@ -20,7 +20,7 @@ contract LazyNFT is ERC721URIStorage, EIP712, AccessControl {
     ERC721("LazyNFT", "LAZ") 
     EIP712(SIGNING_DOMAIN, SIGNATURE_VERSION) {
       _setupRole(MINTER_ROLE, minter);
-    }
+  }
 
   /// @notice Represents an un-minted NFT, which has not yet been recorded into the blockchain. A signed voucher can be redeemed for a real NFT using the redeem function.
   struct NFTVoucher {

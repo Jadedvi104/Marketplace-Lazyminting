@@ -1,91 +1,62 @@
 // SPDX-License-Identifier: Multiverse Expert
 pragma solidity ^0.8.4;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-contract UNQSNFT is
-    ERC721,
-    ERC721URIStorage,
-    ERC721Enumerable,
-    AccessControl,
-    Pausable,
-    ReentrancyGuard
-{
-    struct NFTs {
-        address creator;
-        address[] owner;
-        uint256[] orderId;
-        bool listed;
-        uint256[] price;
-    }
+contract UNQSNFT is ERC721URIStorage, ERC721Enumerable, EIP712, AccessControl {
+    
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
-    mapping(uint256 => NFTs) public sNfts; // tokenid
+    string private constant SIGNING_DOMAIN = "LazyNFT-Voucher";
+    string private constant SIGNATURE_VERSION = "1";
+
     using Counters for Counters.Counter;
     Counters.Counter private tokenIdCounter;
     string public baseURI;
 
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-    bytes32 public constant MARKET_ROLE = keccak256("MARKET_ROLE");
-
-    constructor() ERC721("UniqeSpot", "UNQS") {
+    constructor() 
+    ERC721("UniqeSpot", "UNQS")
+    EIP712(SIGNING_DOMAIN, SIGNATURE_VERSION) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(MINTER_ROLE, msg.sender);
         _grantRole(PAUSER_ROLE, msg.sender);
-        _grantRole(MARKET_ROLE, msg.sender);
-
     }
 
-    function pause() public onlyRole(DEFAULT_ADMIN_ROLE) onlyRole(PAUSER_ROLE) {
-        _pause();
+    mapping (address => uint256) pendingWithdrawals;
+
+    /******************* STRUCT FUNCS *********************/
+
+     struct NFTs {
+        address creator;
+        address[] owner;
     }
 
-    function unpause()
-        public
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        onlyRole(PAUSER_ROLE)
-    {
-        _unpause();
+    /// @notice Represents an un-minted NFT, which has not yet been recorded into the blockchain. A signed voucher can be redeemed for a real NFT using the redeem function.
+    struct NFTVoucher {
+        /// @notice The id of the token to be redeemed. Must be unique - if another token with this ID already exists, the redeem function will revert.
+        uint256 tokenId;
+
+        /// @notice The minimum price (in wei) that the NFT creator is willing to accept for the initial sale of this NFT.
+        uint256 minPrice;
+
+        /// @notice The metadata URI to associate with this token.
+        string uri;
+
+        /// @notice the EIP-712 signature of all other fields in the NFTVoucher struct. For a voucher to be valid, it must be signed by an account with the MINTER_ROLE.
+        bytes signature;
     }
 
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        virtual
-        override(
-            ERC721,
-            ERC721Enumerable,
-            AccessControl
-        )
-        returns (bool)
-    {
-        return
-            interfaceId == type(IERC721).interfaceId ||
-            interfaceId == type(IERC721Metadata).interfaceId ||
-            super.supportsInterface(interfaceId);
-    }
-
-    function _beforeTokenTransfer(
-        address from,
-        address to,
-        uint256 tokenId
-    )
-        internal
-        override(ERC721, ERC721Enumerable)
-        whenNotPaused
-    {
-        super._beforeTokenTransfer(from, to, tokenId);
-    }
-
+    /******************* ACT FUNCS *********************/
+    
     function _burn(uint256 tokenId)
         internal
-        override(ERC721, ERC721URIStorage)
+        override(ERC721URIStorage, ERC721)
     {
         super._burn(tokenId);
     }
@@ -93,16 +64,15 @@ contract UNQSNFT is
     function tokenURI(uint256 tokenId)
         public
         view
-        override(ERC721, ERC721URIStorage)
+        override(ERC721URIStorage, ERC721)
         returns (string memory)
     {
         return super.tokenURI(tokenId);
     }
 
-    function burn(uint256 tokenId) public whenNotPaused onlyRole(MINTER_ROLE) {
-        require(msg.sender == ownerOf(tokenId), "Monster: not owner");
+    function burn(uint256 tokenId) public onlyRole(MINTER_ROLE) {
+        require(msg.sender == ownerOf(tokenId), "Ownership: not owner");
         _burn(tokenId);
-        delete sNfts[tokenId];
     }
 
     function setBaseUri(string memory _baseUri)
@@ -112,9 +82,8 @@ contract UNQSNFT is
         baseURI = _baseUri;
     }
 
-    function safeMint(address owner, string memory _hash)
+    function safeMint(address owner, string memory genHash)
         public
-        whenNotPaused
         onlyRole(MINTER_ROLE)
         returns (uint256)
     {
@@ -126,20 +95,101 @@ contract UNQSNFT is
                 abi.encodePacked(
                     baseURI,
                     "/",
-                    _hash,
+                    genHash,
                     "/",
                     Strings.toString(_tokenId),
                     ".json"
                 )
             )
         );
-        sNfts[_tokenId].creator = owner;
-        sNfts[_tokenId].owner.push(owner);
-        sNfts[_tokenId].listed = false;
 
         tokenIdCounter.increment();
 
         return _tokenId;
+    }
+
+    /******************* MUST HAVE FUNCS *********************/
+
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 tokenId
+    )
+        internal
+        override(ERC721, ERC721Enumerable)
+
+    {
+        super._beforeTokenTransfer(from, to, tokenId);
+    }
+
+    function supportsInterface(bytes4 interfaceId) 
+    public view virtual override 
+    (AccessControl, ERC721, ERC721Enumerable) 
+    returns (bool) {
+    return ERC721.supportsInterface(interfaceId) || AccessControl.supportsInterface(interfaceId);
+    }
+
+    /// @notice Verifies the signature for a given NFTVoucher, returning the address of the signer.
+    /// @dev Will revert if the signature is invalid. Does not verify that the signer is authorized to mint NFTs.
+    /// @param voucher An NFTVoucher describing an unminted NFT.
+    function _verify(NFTVoucher calldata voucher) internal view returns (address) {
+        bytes32 digest = _hash(voucher);
+        return ECDSA.recover(digest, voucher.signature);
+    }
+
+    /// @notice Returns a hash of the given NFTVoucher, prepared using EIP712 typed data hashing rules.
+    /// @param voucher An NFTVoucher to hash.
+    function _hash(NFTVoucher calldata voucher) internal view returns (bytes32) {
+        return _hashTypedDataV4(keccak256(abi.encode(
+        keccak256("NFTVoucher(uint256 tokenId,uint256 minPrice,string uri)"),
+        voucher.tokenId,
+        voucher.minPrice,
+        keccak256(bytes(voucher.uri))
+        )));
+    }
+
+    /// @notice Transfers all pending withdrawal balance to the caller. Reverts if the caller is not an authorized minter.
+    function withdraw() public {
+        require(hasRole(MINTER_ROLE, msg.sender), "Only authorized minters can withdraw");
+        
+        // IMPORTANT: casting msg.sender to a payable address is only safe if ALL members of the minter role are payable addresses.
+        address payable receiver = payable(msg.sender);
+
+        uint amount = pendingWithdrawals[receiver];
+        // zero account before transfer to prevent re-entrancy attack
+        pendingWithdrawals[receiver] = 0;
+        receiver.transfer(amount);
+    }
+
+    /// @notice Retuns the amount of Ether available to the caller to withdraw.
+    function availableToWithdraw() public view returns (uint256) {
+        return pendingWithdrawals[msg.sender];
+    }
+
+    /// @notice Redeems an NFTVoucher for an actual NFT, creating it in the process.
+    /// @param redeemer The address of the account which will receive the NFT upon success.
+    /// @param voucher A signed NFTVoucher that describes the NFT to be redeemed.
+    function redeem(address redeemer, NFTVoucher calldata voucher) public payable returns (uint256) {
+        // make sure signature is valid and get the address of the signer
+        address signer = _verify(voucher);
+
+        // make sure that the signer is authorized to mint NFTs
+        require(hasRole(MINTER_ROLE, signer), "Signature invalid or unauthorized");
+
+        // make sure that the redeemer is paying enough to cover the buyer's cost
+        require(msg.value >= voucher.minPrice, "Insufficient funds to redeem");
+
+        // first assign the token to the signer, to establish provenance on-chain
+        _mint(signer, voucher.tokenId);
+        _setTokenURI(voucher.tokenId, voucher.uri);
+        
+        // transfer the token to the redeemer
+        _transfer(signer, redeemer, voucher.tokenId);
+
+        // record payment to signer's withdrawal balance
+        pendingWithdrawals[signer] += msg.value;
+
+        return voucher.tokenId;
     }
 
 }

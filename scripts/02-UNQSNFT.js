@@ -9,7 +9,7 @@ async function main() {
 
   const addresses = {
     UNQSCoinContractAddr: "",
-    UNQSNFTContractAddr: "",
+    UNQSNFTContractAddr: "0xD737723D86fe32F64282b9142d4AE14b75D8CE6F",
     UNQSNFTPoolContractAddr: "",
     UNQSMarketContractAddr: "",
     MinterAddr: "0x04954d7EB4ff1C8f95DC839550352927Ec058cbf"
@@ -24,8 +24,6 @@ async function main() {
 
   await deploy.grantRole(minterRole, addresses.MinterAddr);
   console.log("UNQSNFT has granted role to:", addresses.MinterAddr)
-
-
 
   try {
     await hre.run("verify:verify", {
