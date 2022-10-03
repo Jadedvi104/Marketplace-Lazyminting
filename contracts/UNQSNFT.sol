@@ -23,7 +23,8 @@ contract UNQSNFT is
 
     string private constant SIGNING_DOMAIN = "LazyNFT-Voucher";
     string private constant SIGNATURE_VERSION = "1";
-    uint256 public constant mintingFee = 1000; //divide by 10000
+    uint256 public constant mintingFee = 1000; //10%
+    uint96 public constant royaltyFee = 500; //5%
     address payable private adminWallet; //adminwallet that collect fee
 
     using Counters for Counters.Counter;
@@ -93,30 +94,25 @@ contract UNQSNFT is
         baseURI = _baseUri;
     }
 
-    function safeMint(address owner, string memory genHash)
-        public
-        onlyRole(MINTER_ROLE)
-        returns (uint256)
-    {
-        uint256 _tokenId = tokenIdCounter.current();
-        _safeMint(owner, _tokenId);
-        _setTokenURI(
-            _tokenId,
-            string(
-                abi.encodePacked(
-                    baseURI,
-                    "/",
-                    genHash,
-                    "/",
-                    Strings.toString(_tokenId),
-                    ".json"
-                )
-            )
-        );
+    // @notice setRoyalty should be set once
+    function setRoyaltyForToken(
+        uint256 tokenId,
+        address receiver,
+        uint96 feeNumerator
+    ) internal {
+        // fee should not be over 10000
+        _setTokenRoyalty(tokenId, receiver, feeNumerator);
+    }
 
-        tokenIdCounter.increment();
-
-        return _tokenId;
+    // @dev call to reset token Royalty
+    function resetRoyaltyForToken(
+        uint256 tokenId,
+        address receiver,
+        uint96 feeNumerator
+    ) public onlyRole(DEFAULT_ADMIN_ROLE) returns (bool) {
+        _resetTokenRoyalty(tokenId);
+        _setTokenRoyalty(tokenId, receiver, feeNumerator);
+        return true;
     }
 
     /******************* MUST HAVE FUNCS *********************/
@@ -142,6 +138,20 @@ contract UNQSNFT is
     }
 
     /******************* VIEW FUNCS *********************/
+
+    /// @notice Verifies the signature for a given NFTVoucher, returning the address of the signer.
+    function getRoyaltyInfo(uint256 _tokenId, uint256 _salePrice)
+        public
+        view
+        returns (address, uint256)
+    {
+        (address receiver, uint256 royaltyAmount) = royaltyInfo(
+            _tokenId,
+            _salePrice
+        );
+
+        return (receiver, royaltyAmount);
+    }
 
     /// @notice Verifies the signature for a given NFTVoucher, returning the address of the signer.
     /// @dev Will revert if the signature is invalid. Does not verify that the signer is authorized to mint NFTs.
@@ -179,39 +189,71 @@ contract UNQSNFT is
 
     /******************* ACTION FUNCS *********************/
 
+    // Standard mint function
+    function safeMint(address owner, string memory genHash)
+        public
+        onlyRole(MINTER_ROLE)
+        returns (uint256)
+    {
+
+        uint256 _tokenId = tokenIdCounter.current();
+        _safeMint(owner, _tokenId);
+        _setTokenURI(
+            _tokenId,
+            string(
+                abi.encodePacked(
+                    baseURI,
+                    "/",
+                    genHash,
+                    "/",
+                    Strings.toString(_tokenId),
+                    ".json"
+                )
+            )
+        );
+
+        //@notice first owner must be equal to creator
+        setRoyaltyForToken(_tokenId, owner, uint96(royaltyFee));
+
+        tokenIdCounter.increment();
+        return _tokenId;
+    }
+
     /// @notice bulk grant role for minter
     function grantMinterRoles(address[] memory _addresses)
         public
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
-        for(uint32 i=0; i< _addresses.length; i++) {
-             grantRole(MINTER_ROLE, _addresses[i]);
+        for (uint32 i = 0; i < _addresses.length; i++) {
+            grantRole(MINTER_ROLE, _addresses[i]);
         }
     }
-    
+
     /// @notice airdrop to users
     function airDrop(address[] memory _addresses)
         public
         onlyRole(MINTER_ROLE)
         returns (uint256[] memory)
     {
-
         uint256[] memory tokenIds = new uint256[](_addresses.length);
 
-        for(uint32 i=0; i< _addresses.length; i++) {
+        for (uint32 i = 0; i < _addresses.length; i++) {
             uint256 _tokenId = tokenIdCounter.current();
             _safeMint(_addresses[i], _tokenId);
             _setTokenURI(
-            _tokenId,
-            string(
-                abi.encodePacked(
-                    baseURI,
-                    "/",
-                    Strings.toString(_tokenId),
-                    ".json"
+                _tokenId,
+                string(
+                    abi.encodePacked(
+                        baseURI,
+                        "/",
+                        Strings.toString(_tokenId),
+                        ".json"
                     )
                 )
             );
+
+            //msg.sender should be the creator
+            setRoyaltyForToken(_tokenId, msg.sender, royaltyFee);
 
             tokenIds[i] = _tokenId;
         }
@@ -263,6 +305,7 @@ contract UNQSNFT is
         // first assign the token to the signer, to establish provenance on-chain
         _mint(signer, voucher.tokenId);
         _setTokenURI(voucher.tokenId, voucher.uri);
+        setRoyaltyForToken(voucher.tokenId, signer, royaltyFee);
 
         // transfer the token to the redeemer
         _transfer(signer, redeemer, voucher.tokenId);
