@@ -12,7 +12,6 @@ async function main() {
   // try {
   //   await hre.run("verify:verify", {
   //     address: deploy.address,
-  //     contract: "contracts/UNQSNFTMarket.sol:UNQSNFTMarket",
   //   })
   // } catch (error) {
   //   console.log(error)

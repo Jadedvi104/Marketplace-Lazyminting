@@ -37,7 +37,7 @@ module.exports = {
         process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
     },
     mumbai: {
-      url: "https://rpc-mumbai.maticvigil.com/v1/7b883dff16b7c58811427e8ea5cd768934492268",
+      url: "https://matic-mumbai.chainstacklabs.com",
       chainId: 80001,
       accounts:
         process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],

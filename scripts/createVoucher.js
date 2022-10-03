@@ -104,17 +104,11 @@ async function main() {
   const lazyminter = new LazyMinter({ nftContract, signer: signer});
   
   // create voucher with different accounts
-  const voucher = await lazyminter.createVoucher(40, "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi")
-  console.log(voucher, '>>>>>>>>>> HELLO');
+  const voucher = await lazyminter.createVoucher(41, "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi")
+  console.log(voucher, '>>>>>>>>>> VOUCHER');
 
-  // const voucher = {
-  //   tokenId: 40,
-  //   uri: 'ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
-  //   minPrice: 0,
-  //   signature: '0x91e20dd93d1f06f57e9b255711251cb65a432f721a9b5c4a58940b271b2d2c54788dd8d94124ec09323d2d294526689308f10398e718ed3fb6628e409c0a01da1c'
-  // }
-  // const res = await nftContract.redeem(addresses.adminWallet, voucher);
-  // console.log(res, '>>>>>>>>>RES');
+  const res = await nftContract.redeem(addresses.adminWallet, voucher);
+  console.log(res, '>>>>>>>>>RES');
 
 }
 
