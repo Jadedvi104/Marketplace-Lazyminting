@@ -7,7 +7,6 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-
 interface NFT_POOL {
     function depositNFT(
         address nftContract,
@@ -23,9 +22,10 @@ interface NFT_POOL {
 }
 
 interface INFT_CORE {
-    function getRoyaltyInfo(
-        uint256 _tokenId, uint256 _salePrice
-    ) external view returns (address, uint256);
+    function getRoyaltyInfo(uint256 _tokenId, uint256 _salePrice)
+        external
+        view
+        returns (address, uint256);
 }
 
 contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
@@ -56,7 +56,6 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
         address payable seller;
         address owner;
         uint256 price;
-        address buyWithTokenContract;
         bool listed;
         bool sold;
     }
@@ -68,7 +67,6 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
         address payable seller;
         address owner;
         uint256 startPrice;
-        address buyWithTokenContract;
         bool started;
         bool ended;
         uint256 endAt;
@@ -229,7 +227,6 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
             payable(msg.sender),
             nftPool,
             price,
-            buyWithTokenContract,
             true,
             false
         );
@@ -267,7 +264,7 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
 
         //update mapping info
         idToOrder[orderId].owner = msg.sender;
-        idToOrder[orderId].seller = address(0);
+        idToOrder[orderId].seller = payable(address(0));
         idToOrder[orderId].listed = false;
 
         emit OrderCanceled(
@@ -288,16 +285,18 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
         uint256 price = idToOrder[orderId].price;
         require(msg.value >= price, "not enough eth");
         uint256 tokenId = idToOrder[orderId].tokenId;
-        address buyWithTokenContract = idToOrder[orderId].buyWithTokenContract;
 
-        (address creator ,uint256 royaltyFee) = nftCore.getRoyaltyInfo(tokenId, price);
+        (address creator, uint256 royaltyFee) = nftCore.getRoyaltyInfo(
+            tokenId,
+            price
+        );
         uint256 fee = (price * feesRate) / 10000;
         uint256 amount = (price - fee) - royaltyFee;
 
         //if not the whitelists, transfer fee to platform.
         if (!isWhitelist[msg.sender]) {
-            (bool sent, ) = adminWallet.call{value: fee}("");
-            require(sent, "Failed to send Ether");
+            (bool sentFee, ) = adminWallet.call{value: fee}("");
+            require(sentFee, "Failed to send Ether");
         }
 
         //transfer Royalty amount
@@ -354,7 +353,6 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
             payable(msg.sender),
             nftPool,
             startPrice,
-            buyWithTokenContract,
             true,
             false,
             endAt,
@@ -383,8 +381,6 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
 
     // bidder call this to bid
     function bid(uint256 auctionId, uint256 bidAmount) external {
-        address buyWithTokenContract = idToAuction[auctionId]
-            .buyWithTokenContract;
         uint256 highestBid = auctionHighestBid[auctionId].bidAmount;
 
         require(idToAuction[auctionId].started, "not started");
@@ -403,7 +399,8 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
             }
             //transfer amount of bid to this contract
             (bool sent, ) = address(this).call{value: transferAmount}("");
-            
+            require(sent, "Failed to send Ether");
+
             // user's lastest bid will always be the highest
             bidsToAuction[auctionId][msg.sender] = bidAmount;
             // Put the hihest bid to mapping
@@ -426,8 +423,6 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
         uint256 highestBid = auctionHighestBid[auctionId].bidAmount;
         address highestBidder = auctionHighestBid[auctionId].highestBidder;
         address payable seller = idToAuction[auctionId].seller;
-        address buyWithTokenContract = idToAuction[auctionId]
-            .buyWithTokenContract;
         uint256 fee = (highestBid * auctionFees) / 10000;
         uint256 transferAmount = highestBid - fee;
 
@@ -441,9 +436,10 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
             if (!isWhitelist[msg.sender]) {
                 // tranfer winner's bid to seller
                 (bool sent, ) = seller.call{value: transferAmount}("");
-
+                require(sent, "Failed Eth");
             } else {
                 (bool sent, ) = seller.call{value: highestBid}("");
+                require(sent, "Failed Eth");
             }
         } else {
             //transfer nft to seller if no winner
@@ -465,14 +461,12 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
             "Auction's not past end date"
         );
         require(!idToAuction[auctionId].ended, "Auction's already ended");
-        address buyWithTokenContract = idToAuction[auctionId]
-            .buyWithTokenContract;
         uint256 transferAmount = bidsToAuction[auctionId][msg.sender];
         address highestBidder = auctionHighestBid[auctionId].highestBidder;
         require(msg.sender != highestBidder, "Highest Bidder can't withdraw");
 
-        // IERC20(buyWithTokenContract).transfer(msg.sender, transferAmount);
         (bool sent, ) = payable(msg.sender).call{value: transferAmount}("");
+        require(sent, "Failed Eth");
 
         emit Withdraw(msg.sender, auctionId, transferAmount);
     }
@@ -480,10 +474,11 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
     /******************* MUST_HAVE Functions *********************/
 
     /* tranfer to owner address*/
-    function transferEth(
-        address payable _to,
-        uint256 _amount
-    ) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    function transferEth(address payable _to, uint256 _amount)
+        public
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         (bool sent, ) = _to.call{value: _amount}("");
+        require(sent, "Failed Eth");
     }
 }
