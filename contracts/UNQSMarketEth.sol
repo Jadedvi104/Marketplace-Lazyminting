@@ -471,7 +471,8 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
         address highestBidder = auctionHighestBid[auctionId].highestBidder;
         require(msg.sender != highestBidder, "Highest Bidder can't withdraw");
 
-        IERC20(buyWithTokenContract).transfer(msg.sender, transferAmount);
+        // IERC20(buyWithTokenContract).transfer(msg.sender, transferAmount);
+        (bool sent, ) = payable(msg.sender).call{value: transferAmount}("");
 
         emit Withdraw(msg.sender, auctionId, transferAmount);
     }
@@ -479,12 +480,10 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
     /******************* MUST_HAVE Functions *********************/
 
     /* tranfer to owner address*/
-    function transferERC20(
-        address _contractAddress,
-        address _to,
+    function transferEth(
+        address payable _to,
         uint256 _amount
     ) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        IERC20 _token = IERC20(_contractAddress);
-        _token.transfer(_to, _amount);
+        (bool sent, ) = _to.call{value: _amount}("");
     }
 }
