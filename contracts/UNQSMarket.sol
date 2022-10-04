@@ -9,9 +9,6 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 
-
-
-
 interface NFT_POOL {
     function depositNFT(
         address nftContract,
@@ -26,6 +23,12 @@ interface NFT_POOL {
     ) external;
 }
 
+interface INFT_CORE {
+    function getRoyaltyInfo(
+        uint256 _tokenId, uint256 _salePrice
+    ) external view returns (address, uint256);
+}
+
 contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
     using Counters for Counters.Counter;
     Counters.Counter public _orderIds;
@@ -38,6 +41,7 @@ contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
 
     address public adminWallet;
     address public nftPool;
+    INFT_CORE public nftCore;
 
     constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -145,12 +149,18 @@ contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
         _unpause();
     }
 
-    //@Admin call to change NFTPool Address
     function updateNFTPool(address _nftPool)
         public
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
         nftPool = _nftPool;
+    }
+
+    function updateNFTCore(INFT_CORE _nftCore)
+        public
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        nftCore = INFT_CORE(_nftCore);
     }
 
     //@Admin call to set whitelists
@@ -279,8 +289,10 @@ contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
         uint256 price = idToOrder[orderId].price;
         uint256 tokenId = idToOrder[orderId].tokenId;
         address buyWithTokenContract = idToOrder[orderId].buyWithTokenContract;
+
+        (address creator ,uint256 royaltyFee) = nftCore.getRoyaltyInfo(tokenId, price);
         uint256 fee = (price * feesRate) / 10000;
-        uint256 amount = price - fee;
+        uint256 amount = (price - fee) - royaltyFee;
 
         //if not the whitelists, transfer fee to platform.
         if (!isWhitelist[msg.sender]) {
@@ -290,6 +302,13 @@ contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
                 fee
             );
         }
+
+        //transfer Royalty amount
+        IERC20(buyWithTokenContract).transferFrom(
+            msg.sender,
+            creator,
+            royaltyFee
+        );
 
         //Transfer token to nft seller.
         IERC20(buyWithTokenContract).transferFrom(
