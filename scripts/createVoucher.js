@@ -48,13 +48,14 @@ async function main() {
      * 
      * @returns {NFTVoucher}
      */
-    async createVoucher(tokenId, uri, minPrice = 0) {
-      const voucher = { tokenId, uri, minPrice }
+    async createVoucher(tokenId, uri, minPrice = 0, royaltyFee = 0) {
+      const voucher = { tokenId, uri, minPrice, royaltyFee }
       const domain = await this._signingDomain()
       const types = {
         NFTVoucher: [
           {name: "tokenId", type: "uint256"},
           {name: "minPrice", type: "uint256"},
+          {name: "royaltyFee", type: "uint96"},
           {name: "uri", type: "string"},  
         ]
       }
@@ -77,7 +78,8 @@ async function main() {
       this._domain = {
         name: SIGNING_DOMAIN_NAME,
         version: SIGNING_DOMAIN_VERSION,
-        verifyingContract: "0x53F33D5D581CDFc75ABA11336053E3fC58a20543",
+        //must input nft address
+        verifyingContract: "0x360524F9Cc492D1D38547f55183462DC3418e2D8",
         chainId,
       }
       return this._domain
@@ -90,9 +92,9 @@ async function main() {
 
   const addresses = {
     CoinContractAddr: "0x8d4E37E817ED2F9FeE78f436F013323C396930eb",
-    NFTContractAddr: "0x53F33D5D581CDFc75ABA11336053E3fC58a20543",
+    NFTContractAddr: "0x360524F9Cc492D1D38547f55183462DC3418e2D8",
     NFTPoolContractAddr: "0xBAe5cB37C063E8E88663AEa8878C06AE2a984Cb3",
-    MarketContractAddr: "0x11a47058E312cbdf75F6c2f1528F3CC65c64b7cB",
+    MarketContractAddr: "0x70D560c0162C9d04A587e47D51488d72dB2AD315",
     MinterAddr: "0x04954d7EB4ff1C8f95DC839550352927Ec058cbf",
     SecondAddr: "0xf73E352Fd36f541C374D1E974F4D84DCD2628C87",
     adminWallet: "0xf73E352Fd36f541C374D1E974F4D84DCD2628C87",
@@ -101,16 +103,33 @@ async function main() {
   const nftContract = await hre.ethers.getContractAt("UNQSNFT", addresses.NFTContractAddr);
   const signer = await hre.ethers.getSigner(addresses.MinterAddr);
 
+  const price = await hre.ethers.utils.parseEther("1.0");
+  console.log(price, 'PRICE');
+
   const lazyminter = new LazyMinter({ nftContract, signer: signer});
   
   // create voucher with different accounts
-  const voucher = await lazyminter.createVoucher(41, "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi")
+  const voucher = await lazyminter.createVoucher(
+    3, 
+    "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi", 
+    price, 
+    500
+    )
   console.log(voucher, '>>>>>>>>>> VOUCHER');
 
-  const res = await nftContract.redeem(addresses.adminWallet, voucher);
+  //   const voucher = {
+  //   tokenId: 2,
+  //   uri: 'ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+  //   minPrice: price,
+  //   royaltyFee: 500,
+  //   signature: '0xc0248cd68c0885941bd511859e575c132cc210e7e1a0b5d074088edf711a60ae0a23f4ca67f0a27a5482f3a6183db940d737fa881aca7026a330c12d061a81a71b'
+  // }
+
+  const res = await nftContract.redeem(addresses.SecondAddr, voucher,{value: price});
   console.log(res, '>>>>>>>>>RES');
 
 }
+
 
   ////////////// END TO ACT /////////////////////////
 

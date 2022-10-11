@@ -8,6 +8,7 @@ require("solidity-coverage")
  * @type import('hardhat/config').HardhatUserConfig
  */
 module.exports = {
+  defaultNetwork: "hardhat",
   solidity: {
     version: "0.8.4",
     settings: {
@@ -18,12 +19,13 @@ module.exports = {
     },
   },
   networks: {
+    hardhat: {
+    },
     rinkeby: {
       url: `https://rinkeby.infura.io/v3/${process.env.INFURA_KEY}`,
       accounts:
         process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
     },
-
     mainnet: {
       url: "https://bsc-dataseed.binance.org",
       chainId: 56,
@@ -37,7 +39,7 @@ module.exports = {
         process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
     },
     mumbai: {
-      url: "https://matic-mumbai.chainstacklabs.com",
+      url: "https://polygon-testnet.public.blastapi.io",
       chainId: 80001,
       accounts:
         process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],

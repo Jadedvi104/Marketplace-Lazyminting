@@ -24,7 +24,6 @@ contract UNQSNFT is
     string private constant SIGNING_DOMAIN = "LazyNFT-Voucher";
     string private constant SIGNATURE_VERSION = "1";
     uint256 public constant mintingFee = 1000; //10%
-    uint96 public constant royaltyFee = 500; //5%
     address payable private adminWallet; //adminwallet that collect fee
 
     using Counters for Counters.Counter;
@@ -39,25 +38,15 @@ contract UNQSNFT is
         _grantRole(MINTER_ROLE, msg.sender);
     }
 
-    /******************* MAPPING *********************/
-
     mapping(address => uint256) pendingWithdrawals;
 
-    /******************* STRUCT *********************/
-
-    /// @notice Represents an un-minted NFT, which has not yet been recorded into the blockchain. A signed voucher can be redeemed for a real NFT using the redeem function.
     struct NFTVoucher {
-        /// @notice The id of the token to be redeemed. Must be unique - if another token with this ID already exists, the redeem function will revert.
         uint256 tokenId;
-        /// @notice The minimum price (in wei) that the NFT creator is willing to accept for the initial sale of this NFT.
         uint256 minPrice;
-        /// @notice The metadata URI to associate with this token.
+        uint96 royaltyFee;
         string uri;
-        /// @notice the EIP-712 signature of all other fields in the NFTVoucher struct. For a voucher to be valid, it must be signed by an account with the MINTER_ROLE.
         bytes signature;
     }
-
-    /******************* SETUP FUNCS *********************/
 
     function setupAdminWallet(address payable _address)
         public
@@ -94,7 +83,6 @@ contract UNQSNFT is
         baseURI = _baseUri;
     }
 
-    // @notice setRoyalty should be set once
     function setRoyaltyForToken(
         uint256 tokenId,
         address receiver,
@@ -114,8 +102,6 @@ contract UNQSNFT is
         _setTokenRoyalty(tokenId, receiver, feeNumerator);
         return true;
     }
-
-    /******************* MUST HAVE FUNCS *********************/
 
     function _beforeTokenTransfer(
         address from,
@@ -137,9 +123,6 @@ contract UNQSNFT is
             AccessControl.supportsInterface(interfaceId);
     }
 
-    /******************* VIEW FUNCS *********************/
-
-    /// @notice Verifies the signature for a given NFTVoucher, returning the address of the signer.
     function getRoyaltyInfo(uint256 _tokenId, uint256 _salePrice)
         public
         view
@@ -153,9 +136,6 @@ contract UNQSNFT is
         return (receiver, royaltyAmount);
     }
 
-    /// @notice Verifies the signature for a given NFTVoucher, returning the address of the signer.
-    /// @dev Will revert if the signature is invalid. Does not verify that the signer is authorized to mint NFTs.
-    /// @param voucher An NFTVoucher describing an unminted NFT.
     function _verify(NFTVoucher calldata voucher)
         internal
         view
@@ -165,8 +145,6 @@ contract UNQSNFT is
         return ECDSA.recover(digest, voucher.signature);
     }
 
-    /// @notice Returns a hash of the given NFTVoucher, prepared using EIP712 typed data hashing rules.
-    /// @param voucher An NFTVoucher to hash.
     function _hash(NFTVoucher calldata voucher)
         internal
         view
@@ -177,25 +155,22 @@ contract UNQSNFT is
                 keccak256(
                     abi.encode(
                         keccak256(
-                            "NFTVoucher(uint256 tokenId,uint256 minPrice,string uri)"
+                            "NFTVoucher(uint256 tokenId,uint256 minPrice,uint96 royaltyFee,string uri)"
                         ),
                         voucher.tokenId,
                         voucher.minPrice,
+                        voucher.royaltyFee,
                         keccak256(bytes(voucher.uri))
                     )
                 )
             );
     }
 
-    /******************* ACTION FUNCS *********************/
-
-    // Standard mint function
-    function safeMint(address owner, string memory genHash)
+    function safeMint(address owner, uint96 _royaltyFee)
         public
         onlyRole(MINTER_ROLE)
         returns (uint256)
     {
-
         uint256 _tokenId = tokenIdCounter.current();
         _safeMint(owner, _tokenId);
         _setTokenURI(
@@ -204,22 +179,18 @@ contract UNQSNFT is
                 abi.encodePacked(
                     baseURI,
                     "/",
-                    genHash,
-                    "/",
                     Strings.toString(_tokenId),
                     ".json"
                 )
             )
         );
 
-        //@notice first owner must be equal to creator
-        setRoyaltyForToken(_tokenId, owner, uint96(royaltyFee));
+        setRoyaltyForToken(_tokenId, owner, _royaltyFee);
 
         tokenIdCounter.increment();
         return _tokenId;
     }
 
-    /// @notice bulk grant role for minter
     function grantMinterRoles(address[] memory _addresses)
         public
         onlyRole(DEFAULT_ADMIN_ROLE)
@@ -229,8 +200,7 @@ contract UNQSNFT is
         }
     }
 
-    /// @notice airdrop to users
-    function airDrop(address[] memory _addresses)
+    function airDrop(address[] memory _addresses, uint96 _royaltyFee)
         public
         onlyRole(MINTER_ROLE)
         returns (uint256[] memory)
@@ -253,7 +223,7 @@ contract UNQSNFT is
             );
 
             //msg.sender should be the creator
-            setRoyaltyForToken(_tokenId, msg.sender, royaltyFee);
+            setRoyaltyForToken(_tokenId, msg.sender, _royaltyFee);
 
             tokenIds[i] = _tokenId;
         }
@@ -261,7 +231,6 @@ contract UNQSNFT is
         return tokenIds;
     }
 
-    /// @notice Transfers all pending withdrawal balance to the caller. Reverts if the caller is not an authorized minter.
     function withdraw() public nonReentrant {
         require(
             hasRole(MINTER_ROLE, msg.sender),
@@ -277,14 +246,10 @@ contract UNQSNFT is
         receiver.transfer(amount);
     }
 
-    /// @notice Retuns the amount of Ether available to the caller to withdraw.
     function availableToWithdraw() public view returns (uint256) {
         return pendingWithdrawals[msg.sender];
     }
 
-    /// @notice Redeems an NFTVoucher for an actual NFT, creating it in the process.
-    /// @param redeemer The address of the account which will receive the NFT upon success.
-    /// @param voucher A signed NFTVoucher that describes the NFT to be redeemed.
     function redeem(address redeemer, NFTVoucher calldata voucher)
         public
         payable
@@ -305,7 +270,7 @@ contract UNQSNFT is
         // first assign the token to the signer, to establish provenance on-chain
         _mint(signer, voucher.tokenId);
         _setTokenURI(voucher.tokenId, voucher.uri);
-        setRoyaltyForToken(voucher.tokenId, signer, royaltyFee);
+        setRoyaltyForToken(voucher.tokenId, signer, voucher.royaltyFee);
 
         // transfer the token to the redeemer
         _transfer(signer, redeemer, voucher.tokenId);

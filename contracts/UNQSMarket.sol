@@ -8,7 +8,6 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-
 interface NFT_POOL {
     function depositNFT(
         address nftContract,
@@ -24,9 +23,10 @@ interface NFT_POOL {
 }
 
 interface INFT_CORE {
-    function getRoyaltyInfo(
-        uint256 _tokenId, uint256 _salePrice
-    ) external view returns (address, uint256);
+    function getRoyaltyInfo(uint256 _tokenId, uint256 _salePrice)
+        external
+        view
+        returns (address, uint256);
 }
 
 contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
@@ -34,18 +34,14 @@ contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
     Counters.Counter public _orderIds;
     Counters.Counter public _auctionIds;
 
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-
     uint256 public auctionFees = 1000;
     uint256 public feesRate = 425;
 
     address public adminWallet;
     address public nftPool;
-    INFT_CORE public nftCore;
 
     constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(PAUSER_ROLE, msg.sender);
     }
 
     /************************** Structs *********************/
@@ -154,13 +150,6 @@ contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
         nftPool = _nftPool;
-    }
-
-    function updateNFTCore(INFT_CORE _nftCore)
-        public
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
-        nftCore = INFT_CORE(_nftCore);
     }
 
     //@Admin call to set whitelists
@@ -290,7 +279,9 @@ contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
         uint256 tokenId = idToOrder[orderId].tokenId;
         address buyWithTokenContract = idToOrder[orderId].buyWithTokenContract;
 
-        (address creator ,uint256 royaltyFee) = nftCore.getRoyaltyInfo(tokenId, price);
+        (address creator, uint256 royaltyFee) = INFT_CORE(
+            idToOrder[orderId].nftContract
+        ).getRoyaltyInfo(tokenId, price);
         uint256 fee = (price * feesRate) / 10000;
         uint256 amount = (price - fee) - royaltyFee;
 
@@ -477,7 +468,7 @@ contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
             block.timestamp >= idToAuction[auctionId].endAt,
             "Auction's not past end date"
         );
-        require(!idToAuction[auctionId].ended, "Auction's already ended");
+        require(idToAuction[auctionId].ended, "Auction not ended");
         address buyWithTokenContract = idToAuction[auctionId]
             .buyWithTokenContract;
         uint256 transferAmount = bidsToAuction[auctionId][msg.sender];

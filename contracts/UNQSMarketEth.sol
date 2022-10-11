@@ -30,21 +30,17 @@ interface INFT_CORE {
 
 contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
     using Counters for Counters.Counter;
-    Counters.Counter public _orderIds;
-    Counters.Counter public _auctionIds;
+    Counters.Counter private _orderIds;
+    Counters.Counter private _auctionIds;
 
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-
-    uint256 public auctionFees = 1000;
+    uint256 public auctionFees = 1000; //10,000 = 100%
     uint256 public feesRate = 425;
 
     address payable public adminWallet;
     address public nftPool;
-    INFT_CORE public nftCore;
 
     constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(PAUSER_ROLE, msg.sender);
     }
 
     /************************** Structs *********************/
@@ -95,7 +91,6 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
         address seller,
         address owner,
         uint256 price,
-        address buyWithTokenContract,
         bool listed,
         bool sold
     );
@@ -124,7 +119,6 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
         address seller,
         address owner,
         uint256 startPrice,
-        address buyWithTokenContract,
         bool started,
         bool ended,
         uint256 endAt,
@@ -151,13 +145,6 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
         nftPool = _nftPool;
-    }
-
-    function updateNFTCore(INFT_CORE _nftCore)
-        public
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
-        nftCore = INFT_CORE(_nftCore);
     }
 
     //@Admin call to set whitelists
@@ -201,20 +188,15 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
         auctionFees = newRate;
     }
 
-    /*******************Read Functions *********************/
-
     // for frontend \\
     // Listing Items
     // Items info
-
-    /******************* Buy/Sell/Cancel Functions *********************/
 
     /* Places an item for sale on the marketplace */
     function createOrder(
         address nftContract,
         uint256 tokenId,
-        uint256 price,
-        address buyWithTokenContract
+        uint256 price
     ) public payable nonReentrant {
         // set require ERC721 approve below
         require(price > 100, "Price must be at least 100 wei");
@@ -242,7 +224,6 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
             msg.sender,
             nftPool,
             price,
-            buyWithTokenContract,
             true,
             false
         );
@@ -286,10 +267,9 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
         require(msg.value >= price, "not enough eth");
         uint256 tokenId = idToOrder[orderId].tokenId;
 
-        (address creator, uint256 royaltyFee) = nftCore.getRoyaltyInfo(
-            tokenId,
-            price
-        );
+        (address creator, uint256 royaltyFee) = INFT_CORE(
+            idToOrder[orderId].nftContract
+        ).getRoyaltyInfo(tokenId, price);
         uint256 fee = (price * feesRate) / 10000;
         uint256 amount = (price - fee) - royaltyFee;
 
@@ -334,7 +314,6 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
         address nftContract,
         uint256 tokenId,
         uint256 startPrice,
-        address buyWithTokenContract,
         uint256 dateAmount
     ) external nonReentrant {
         _auctionIds.increment();
@@ -371,7 +350,6 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
             msg.sender,
             nftPool,
             startPrice,
-            buyWithTokenContract,
             true,
             false,
             endAt,
@@ -380,34 +358,35 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
     }
 
     // bidder call this to bid
-    function bid(uint256 auctionId, uint256 bidAmount) external {
+    function bid(uint256 auctionId) external payable {
         uint256 highestBid = auctionHighestBid[auctionId].bidAmount;
 
         require(idToAuction[auctionId].started, "not started");
         require(block.timestamp < idToAuction[auctionId].endAt, "ended");
-        require(bidAmount > highestBid, "bid amount < highest");
+        require(msg.value > highestBid, "bid amount < highest");
 
         if (msg.sender != address(0)) {
             //calculate left amount
-            uint256 transferAmount;
+            uint256 unusedAmount = 0;
             if (bidsToAuction[auctionId][msg.sender] > 0) {
-                transferAmount =
-                    bidAmount -
-                    bidsToAuction[auctionId][msg.sender];
-            } else {
-                transferAmount = bidAmount;
+                unusedAmount = bidsToAuction[auctionId][msg.sender];
             }
-            //transfer amount of bid to this contract
-            (bool sent, ) = address(this).call{value: transferAmount}("");
-            require(sent, "Failed to send Ether");
 
             // user's lastest bid will always be the highest
-            bidsToAuction[auctionId][msg.sender] = bidAmount;
+            bidsToAuction[auctionId][msg.sender] = msg.value;
             // Put the hihest bid to mapping
-            auctionHighestBid[auctionId].bidAmount = bidAmount;
+            auctionHighestBid[auctionId].bidAmount = msg.value;
             auctionHighestBid[auctionId].highestBidder = msg.sender;
+
+            //transfer unneeded amont to bidder
+            (bool sent, ) = msg.sender.call{value: unusedAmount}("");
+            require(sent, "Failed to send Ether");
+
+        } else {
+            revert();
         }
-        emit Bid(auctionId, msg.sender, bidAmount);
+
+        emit Bid(auctionId, msg.sender, msg.value);
     }
 
     //seller or winner call this to claim their item/eth
@@ -460,7 +439,7 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
             block.timestamp >= idToAuction[auctionId].endAt,
             "Auction's not past end date"
         );
-        require(!idToAuction[auctionId].ended, "Auction's already ended");
+        require(idToAuction[auctionId].ended, "Auction not ended");
         uint256 transferAmount = bidsToAuction[auctionId][msg.sender];
         address highestBidder = auctionHighestBid[auctionId].highestBidder;
         require(msg.sender != highestBidder, "Highest Bidder can't withdraw");
