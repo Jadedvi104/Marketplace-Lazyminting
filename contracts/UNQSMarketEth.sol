@@ -3,7 +3,7 @@ pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
@@ -28,7 +28,7 @@ interface INFT_CORE {
         returns (address, uint256);
 }
 
-contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
+contract UNQSMarketEth is ReentrancyGuard, Pausable, Ownable {
     using Counters for Counters.Counter;
     Counters.Counter private _orderIds;
     Counters.Counter private _auctionIds;
@@ -40,7 +40,6 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
     address public nftPool;
 
     constructor() {
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     /************************** Structs *********************/
@@ -132,17 +131,17 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
     /******************* Setup Functions *********************/
 
     //@Admin if something happen Admin can call this function to pause txs
-    function pause() public onlyRole(DEFAULT_ADMIN_ROLE) {
+    function pause() public onlyOwner {
         _pause();
     }
 
-    function unpause() public onlyRole(DEFAULT_ADMIN_ROLE) {
+    function unpause() public onlyOwner {
         _unpause();
     }
 
     function updateNFTPool(address _nftPool)
         public
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyOwner
     {
         nftPool = _nftPool;
     }
@@ -150,7 +149,7 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
     //@Admin call to set whitelists
     function setWhitelist(address whitelistAddress)
         public
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyOwner
     {
         require(
             !isWhitelist[whitelistAddress],
@@ -162,7 +161,7 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
     //@Admin call to update market fee
     function updateFeesRate(uint256 feeRate)
         public
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyOwner
     {
         // feeAmount will be / by 10000
         // if you want 5% feeRate should be 500
@@ -172,7 +171,7 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
     //@Admin call to update market fee
     function updateAdminWallet(address payable _adminWallet)
         public
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyOwner
     {
         // feeAmount will be / by 10000
         // if you want 5% feeRate should be 500
@@ -182,7 +181,7 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
     //@Admin call to update auction fee
     function updateAuctionFeesRate(uint256 newRate)
         public
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyOwner
     {
         require(newRate >= 500);
         auctionFees = newRate;
@@ -197,7 +196,7 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
         address nftContract,
         uint256 tokenId,
         uint256 price
-    ) public payable nonReentrant {
+    ) public nonReentrant {
         // set require ERC721 approve below
         require(price > 100, "Price must be at least 100 wei");
         _orderIds.increment();
@@ -455,7 +454,7 @@ contract UNQSMarketEth is ReentrancyGuard, Pausable, AccessControl {
     /* tranfer to owner address*/
     function transferEth(address payable _to, uint256 _amount)
         public
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyOwner
     {
         (bool sent, ) = _to.call{value: _amount}("");
         require(sent, "Failed Eth");

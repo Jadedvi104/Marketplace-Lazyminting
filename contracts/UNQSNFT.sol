@@ -39,9 +39,10 @@ contract UNQSNFT is
     }
 
     mapping(address => uint256) pendingWithdrawals;
+    mapping(string => uint256) tokenIdforUri;
 
     struct NFTVoucher {
-        uint256 tokenId;
+        bytes32 voucherCode;
         uint256 minPrice;
         uint96 royaltyFee;
         string uri;
@@ -145,6 +146,10 @@ contract UNQSNFT is
         return ECDSA.recover(digest, voucher.signature);
     }
 
+    function getTokenId(string memory uri) public view returns (uint256) {
+        return tokenIdforUri[uri];
+    }
+
     function _hash(NFTVoucher calldata voucher)
         internal
         view
@@ -155,9 +160,9 @@ contract UNQSNFT is
                 keccak256(
                     abi.encode(
                         keccak256(
-                            "NFTVoucher(uint256 tokenId,uint256 minPrice,uint96 royaltyFee,string uri)"
+                            "NFTVoucher(bytes32 voucherCode,uint256 minPrice,uint96 royaltyFee,string uri)"
                         ),
-                        voucher.tokenId,
+                        voucher.voucherCode,
                         voucher.minPrice,
                         voucher.royaltyFee,
                         keccak256(bytes(voucher.uri))
@@ -166,28 +171,30 @@ contract UNQSNFT is
             );
     }
 
-    function safeMint(address owner, uint96 _royaltyFee)
-        public
-        onlyRole(MINTER_ROLE)
-        returns (uint256)
-    {
+    function safeMint(
+        address _to,
+        string memory uriHash,
+        uint96 _royaltyFee
+    ) public onlyRole(MINTER_ROLE) returns (uint256) {
+        tokenIdCounter.increment();
         uint256 _tokenId = tokenIdCounter.current();
-        _safeMint(owner, _tokenId);
-        _setTokenURI(
-            _tokenId,
-            string(
+        string memory uri = string(
                 abi.encodePacked(
                     baseURI,
+                    "/",
+                    uriHash,
                     "/",
                     Strings.toString(_tokenId),
                     ".json"
                 )
-            )
+            );
+        _safeMint(_to, _tokenId);
+        _setTokenURI(
+            _tokenId,
+            uri
         );
-
-        setRoyaltyForToken(_tokenId, owner, _royaltyFee);
-
-        tokenIdCounter.increment();
+        setRoyaltyForToken(_tokenId, msg.sender, _royaltyFee);
+        tokenIdforUri[uri] = _tokenId;
         return _tokenId;
     }
 
@@ -200,34 +207,33 @@ contract UNQSNFT is
         }
     }
 
-    function airDrop(address[] memory _addresses, uint96 _royaltyFee)
-        public
-        onlyRole(MINTER_ROLE)
-        returns (uint256[] memory)
-    {
+    function airDrop(
+        address[] memory _addresses,
+        string[] memory uriHashes,
+        uint96 _royaltyFee
+    ) public onlyRole(MINTER_ROLE) returns (uint256[] memory) {
+        require(_addresses.length == uriHashes.length, "Length must equal");
         uint256[] memory tokenIds = new uint256[](_addresses.length);
 
         for (uint32 i = 0; i < _addresses.length; i++) {
+            tokenIdCounter.increment();
             uint256 _tokenId = tokenIdCounter.current();
             _safeMint(_addresses[i], _tokenId);
-            _setTokenURI(
-                _tokenId,
-                string(
-                    abi.encodePacked(
-                        baseURI,
-                        "/",
-                        Strings.toString(_tokenId),
-                        ".json"
-                    )
+            string memory uri = string(
+                abi.encodePacked(
+                    baseURI,
+                    "/",
+                    uriHashes[i],
+                    "/",
+                    Strings.toString(_tokenId),
+                    ".json"
                 )
             );
-
-            //msg.sender should be the creator
+            _setTokenURI(_tokenId, uri);
             setRoyaltyForToken(_tokenId, msg.sender, _royaltyFee);
-
+            tokenIdforUri[uri] = _tokenId;
             tokenIds[i] = _tokenId;
         }
-
         return tokenIds;
     }
 
@@ -250,12 +256,11 @@ contract UNQSNFT is
         return pendingWithdrawals[msg.sender];
     }
 
-    function redeem(address redeemer, NFTVoucher calldata voucher)
+    function redeem(NFTVoucher calldata voucher)
         public
         payable
         returns (uint256)
     {
-        // make sure signature is valid and get the address of the signer
         address signer = _verify(voucher);
 
         // make sure that the signer is authorized to mint NFTs
@@ -264,18 +269,11 @@ contract UNQSNFT is
             "Signature invalid or unauthorized"
         );
 
-        // make sure that the redeemer is paying enough to cover the buyer's cost
-        require(msg.value >= voucher.minPrice, "Insufficient funds to redeem");
-
-        // first assign the token to the signer, to establish provenance on-chain
-        _mint(signer, voucher.tokenId);
-        _setTokenURI(voucher.tokenId, voucher.uri);
-        setRoyaltyForToken(voucher.tokenId, signer, voucher.royaltyFee);
-
-        // transfer the token to the redeemer
-        _transfer(signer, redeemer, voucher.tokenId);
-
         if (voucher.minPrice > 0) {
+            require(
+                msg.value >= voucher.minPrice,
+                "Insufficient funds to redeem"
+            );
             //calculate the fee
             uint256 fee = (msg.value * mintingFee) / 10000;
             uint256 amount = msg.value - fee;
@@ -288,6 +286,14 @@ contract UNQSNFT is
             pendingWithdrawals[signer] += amount;
         }
 
-        return voucher.tokenId;
+        tokenIdCounter.increment();
+        uint256 _tokenId = tokenIdCounter.current();
+
+        _safeMint(msg.sender, _tokenId);
+        _setTokenURI(_tokenId, voucher.uri);
+        setRoyaltyForToken(_tokenId, signer, voucher.royaltyFee);
+        tokenIdforUri[voucher.uri] = _tokenId;
+
+        return _tokenId;
     }
 }

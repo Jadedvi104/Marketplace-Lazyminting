@@ -4,7 +4,7 @@ pragma solidity ^0.8.4;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
@@ -29,7 +29,7 @@ interface INFT_CORE {
         returns (address, uint256);
 }
 
-contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
+contract UNQSMarket is ReentrancyGuard, Pausable, Ownable {
     using Counters for Counters.Counter;
     Counters.Counter public _orderIds;
     Counters.Counter public _auctionIds;
@@ -40,9 +40,7 @@ contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
     address public adminWallet;
     address public nftPool;
 
-    constructor() {
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-    }
+    constructor() {}
 
     /************************** Structs *********************/
 
@@ -137,17 +135,17 @@ contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
     /******************* Setup Functions *********************/
 
     //@Admin if something happen Admin can call this function to pause txs
-    function pause() public onlyRole(DEFAULT_ADMIN_ROLE) {
+    function pause() public onlyOwner {
         _pause();
     }
 
-    function unpause() public onlyRole(DEFAULT_ADMIN_ROLE) {
+    function unpause() public onlyOwner {
         _unpause();
     }
 
     function updateNFTPool(address _nftPool)
         public
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyOwner
     {
         nftPool = _nftPool;
     }
@@ -155,7 +153,7 @@ contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
     //@Admin call to set whitelists
     function setWhitelist(address whitelistAddress)
         public
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyOwner
     {
         require(
             !isWhitelist[whitelistAddress],
@@ -167,7 +165,7 @@ contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
     //@Admin call to update market fee
     function updateFeesRate(uint256 feeRate)
         public
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyOwner
     {
         // feeAmount will be / by 10000
         // if you want 5% feeRate should be 500
@@ -177,7 +175,7 @@ contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
     //@Admin call to update market fee
     function updateAdminWallet(address _adminWallet)
         public
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyOwner
     {
         // feeAmount will be / by 10000
         // if you want 5% feeRate should be 500
@@ -187,7 +185,7 @@ contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
     //@Admin call to update auction fee
     function updateAuctionFeesRate(uint256 newRate)
         public
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyOwner
     {
         require(newRate >= 500);
         auctionFees = newRate;
@@ -487,7 +485,7 @@ contract UNQSMarket is ReentrancyGuard, Pausable, AccessControl {
         address _contractAddress,
         address _to,
         uint256 _amount
-    ) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) public onlyOwner {
         IERC20 _token = IERC20(_contractAddress);
         _token.transfer(_to, _amount);
     }

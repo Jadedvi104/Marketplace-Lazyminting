@@ -39,21 +39,13 @@ async function main() {
       this.signer = signer
     }
 
-    /**
-     * Creates a new NFTVoucher object and signs it using this LazyMinter's signing key.
-     * 
-     * @param {ethers.BigNumber | number} tokenId the id of the un-minted NFT
-     * @param {string} uri the metadata URI to associate with this NFT
-     * @param {ethers.BigNumber | number} minPrice the minimum price (in wei) that the creator will accept to redeem this NFT. defaults to zero
-     * 
-     * @returns {NFTVoucher}
-     */
-    async createVoucher(tokenId, uri, minPrice = 0, royaltyFee = 0) {
-      const voucher = { tokenId, uri, minPrice, royaltyFee }
+    async createVoucher(voucherCode, uri, minPrice = 0, royaltyFee = 0) {
+      const voucher = { voucherCode, uri, minPrice, royaltyFee }
+      // console.log(voucher, "VOUCHER");
       const domain = await this._signingDomain()
       const types = {
         NFTVoucher: [
-          {name: "tokenId", type: "uint256"},
+          {name: "voucherCode", type: "bytes32"},
           {name: "minPrice", type: "uint256"},
           {name: "royaltyFee", type: "uint96"},
           {name: "uri", type: "string"},  
@@ -79,59 +71,55 @@ async function main() {
         name: SIGNING_DOMAIN_NAME,
         version: SIGNING_DOMAIN_VERSION,
         //must input nft address
-        verifyingContract: "0x360524F9Cc492D1D38547f55183462DC3418e2D8",
+        verifyingContract: "0xcfe81db08a75CdA49320f5a07ABce092B3dd39B6",
         chainId,
       }
       return this._domain
     }
   }
 
-  ////////////// END CLASS /////////////////////////
-
   ////////////// START TO ACT /////////////////////////
 
   const addresses = {
-    CoinContractAddr: "0x8d4E37E817ED2F9FeE78f436F013323C396930eb",
-    NFTContractAddr: "0x360524F9Cc492D1D38547f55183462DC3418e2D8",
-    NFTPoolContractAddr: "0xBAe5cB37C063E8E88663AEa8878C06AE2a984Cb3",
-    MarketContractAddr: "0x70D560c0162C9d04A587e47D51488d72dB2AD315",
+    NFTContractAddr: "0xcfe81db08a75CdA49320f5a07ABce092B3dd39B6",
+    MarketContractAddr: "",
     MinterAddr: "0x04954d7EB4ff1C8f95DC839550352927Ec058cbf",
     SecondAddr: "0xf73E352Fd36f541C374D1E974F4D84DCD2628C87",
     adminWallet: "0xf73E352Fd36f541C374D1E974F4D84DCD2628C87",
+    aviAddr: "0xFcF3c57F4FF25B3EaBEba12D32401b2fA10C0CDD"
   }
 
   const nftContract = await hre.ethers.getContractAt("UNQSNFT", addresses.NFTContractAddr);
   const signer = await hre.ethers.getSigner(addresses.MinterAddr);
 
-  const price = await hre.ethers.utils.parseEther("1.0");
-  console.log(price, 'PRICE');
+  const voucherCode = ethers.utils.formatBytes32String("ABN-YJ-001");
+  const price = await ethers.utils.parseEther("0.0001");
+  const uri = 'ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
 
-  const lazyminter = new LazyMinter({ nftContract, signer: signer});
+  const lazyminter = new LazyMinter({ contract: nftContract, signer: signer});
   
-  // create voucher with different accounts
-  const voucher = await lazyminter.createVoucher(
-    3, 
-    "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi", 
-    price, 
-    500
-    )
-  console.log(voucher, '>>>>>>>>>> VOUCHER');
+  // const voucher = await lazyminter.createVoucher(
+  //   voucherCode, 
+  //   uri, 
+  //   price, 
+  //   500
+  // )
+  // console.log(voucher, '>>>>>>>>>> VOUCHER');
 
-  //   const voucher = {
-  //   tokenId: 2,
-  //   uri: 'ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
-  //   minPrice: price,
-  //   royaltyFee: 500,
-  //   signature: '0xc0248cd68c0885941bd511859e575c132cc210e7e1a0b5d074088edf711a60ae0a23f4ca67f0a27a5482f3a6183db940d737fa881aca7026a330c12d061a81a71b'
-  // }
+  const voucher = {
+  voucherCode: voucherCode,
+  uri: uri,
+  minPrice: price,      
+  royaltyFee: 500,
+  signature: '0xe25f33f6800b9c3a06981c9c9f2edc0e0a96db3611ab8ca478d5cc1b1510f4435e2232a0515c670f627ed0a856f1db5abe85a86af52699c1e80223065f2e5bec1c'   
+}
 
-  const res = await nftContract.redeem(addresses.SecondAddr, voucher,{value: price});
-  console.log(res, '>>>>>>>>>RES');
+  const res = await nftContract.redeem(voucher, {value: price});
+  console.log(res,'RESULT');
 
 }
 
-
-  ////////////// END TO ACT /////////////////////////
+////////////// END TO ACT /////////////////////////
 
 
 main().catch((error) => {
