@@ -1,15 +1,23 @@
-# Basic Sample Hardhat Project
+# NFT Marketplace and Lazyminting NFT
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, a sample script that deploys that contract, and an example of a task implementation, which simply lists the available accounts.
+<h2>Smart Contract Including: </h2>
+<p>NFT</p>
+<ul>
+  <li>ERC721
+  <li>EIP712
+  <li>ERC2981(Royalty)
+</ul>
+<p>MARKETPLACE</p>
+<ul>
+  <li>English Auction
+  <li>Market Fee
+  <li>Buy/Sell/Cancel
+  <li>Pay with Eth/Pay with Token
+</ul>
+<p>NFTPool</p>
+<ul>
+ <li>NFT Storage
+ </ul>
 
-Try running some of the following tasks:
 
-```shell
-npx hardhat accounts
-npx hardhat compile
-npx hardhat clean
-npx hardhat test
-npx hardhat node
-node scripts/sample-script.js
-npx hardhat help
-```
+![alt text](https://i.imgur.com/JZhQkEy.png)
